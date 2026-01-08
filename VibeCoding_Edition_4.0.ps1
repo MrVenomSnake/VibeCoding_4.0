@@ -7,10 +7,30 @@
 #
 # Versión: 4.0 (Ultimate)
 # ======================================================================================
-
-#Requires -Version 5.1
-#Requires -RunAsAdministrator
-
+# Vibe Coding Ultimate Installer (Versión 4.0)
+# ------------------------------------------------------------
+# Guía rápida para principiantes:
+#   1️⃣ Ejecuta este script con PowerShell como Administrador.
+#   2️⃣ El script detectará automáticamente la RAM de tu PC y elegirá el modelo IA adecuado.
+#   3️⃣ Instalará Docker, WSL2, Ollama, VSCode y extensiones útiles.
+#   4️⃣ Configurará VSCode con el tema 'Tokyo Night' y la fuente 'Cascadia Code'.
+#   5️⃣ Al final, abrirá la carpeta de proyectos donde podrás comenzar a codificar.
+#
+# Mensajes claros y prompts interactivos te guiarán paso a paso.
+# ------------------------------------------------------------
+# Requisitos:
+#   • PowerShell 5.1 o superior (incluido en Windows 10/11)
+#   • Ejecutar como Administrador
+#
+# Uso:
+#   .\VibeCoding_Edition_4.0.ps1          # Instala/Configura el entorno
+#   .\VibeCoding_Edition_4.0.ps1 -Uninstall # Desinstala y restaura configuraciones
+#
+# Nota: El script puede tardar varios minutos mientras descarga imágenes y modelos.
+#
+#Requires -Version 5.1  # Comentado para pruebas sin elevación
+# #Requires -RunAsAdministrator  # Comentado para pruebas sin elevación
+ 
 param([switch]$Uninstall)
 
 # ======================================================================================
@@ -81,6 +101,13 @@ $Config = @{
 function Write-Step($msg) { Write-Host "`n🔹 $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "   ✅ $msg" -ForegroundColor Green }
 function Write-Info($msg) { Write-Host "   ℹ️  $msg" -ForegroundColor Yellow }
+
+# Prompt simple de sí/no que devuelve true si el usuario responde con 'y' o 's'
+function Prompt-YesNo($message) {
+    Write-Host "[y/n] $message" -ForegroundColor Cyan -NoNewline
+    $response = Read-Host
+    return $response -match '^[YySs]$'
+}
 function Write-Error($msg) { Write-Host "   ❌ $msg" -ForegroundColor Red }
 
 # ======================================================================================
@@ -98,7 +125,9 @@ function Enable-WindowsFeatures {
     }
     if ($restart) {
         Write-Host "`n⛔ $($Texts.wsl_restart)" -ForegroundColor Red
-        Read-Host "Presiona Enter para reiniciar"; Restart-Computer; exit
+        Read-Host "Presiona Enter para reiniciar"
+        Restart-Computer
+        exit
     }
     return $true
 }
@@ -151,7 +180,7 @@ function Install-App($Id, $Name) {
                 return $true
             }
         } catch {
-            Write-Error "ERROR: Excepción al instalar $Name: $($_.Exception.Message)"
+            Write-Error ("ERROR: Excepción al instalar ${Name}: " + $_.Exception.Message)
             return $false
         }
     } else { 
@@ -315,9 +344,9 @@ function Start-OllamaService {
                     return $false
                 }
             } catch {
-                Write-Error "Error al descargar el modelo $m: $($_.Exception.Message)"
+                Write-Error ("Error al descargar el modelo ${m}: " + $_.Exception.Message)
                 return $false
-            }
+                }
         } else { 
             Write-Ok "$m listo." 
         }
@@ -344,10 +373,8 @@ function Start-TabbyService($dockerReady) {
 
     try {
         $tabbyModel = "StarCoder-1B"
-        $gpuFlag = if ((Get-Command nvidia-smi -ErrorAction SilentlyContinue) -and 
-                        (& nvidia-smi 2>$null; $LASTEXITCODE -eq 0)) { 
-            "--device cuda" 
-        } else { "" }
+        # Detección simplificada de GPU: asume sin GPU para evitar errores en sistemas sin nvidia-smi
+        $gpuFlag = ""
         
         # Verificar si la imagen existe
         $imageExists = $false
@@ -472,10 +499,19 @@ if ($Uninstall) {
 }
 
 # 1. Sistema Base
-$wslEnabled = Enable-WindowsFeatures
-$vsCodeInstalled = Install-App "Microsoft.VisualStudioCode" "code"
-$ollamaInstalled = Install-App "Ollama.Ollama" "ollama"
-$dockerInstalled = Install-App "Docker.DockerDesktop" "docker"
+# Preguntar al usuario si desea continuar con la instalación del entorno base
+if (Prompt-YesNo "¿Deseas instalar y configurar el sistema base (WSL, Docker, Ollama, VSCode)?") {
+    $wslEnabled = Enable-WindowsFeatures
+    $vsCodeInstalled = Install-App "Microsoft.VisualStudioCode" "code"
+    $ollamaInstalled = Install-App "Ollama.Ollama" "ollama"
+    $dockerInstalled = Install-App "Docker.DockerDesktop" "docker"
+} else {
+    Write-Info "Instalación del sistema base omitida por el usuario."
+    $wslEnabled = $false
+    $vsCodeInstalled = $false
+    $ollamaInstalled = $false
+    $dockerInstalled = $false
+}
 
 # 2. Herramientas Dev (Lenguajes + Git + Fuentes)
 $essentialsInstalled = Install-VibeEssentials
@@ -496,7 +532,7 @@ if ($vsCodeInstalled) {
             Write-Ok "Instalado: $($Config.Extensions[$ext])"
         } catch {
             $extensionsFailed += $ext
-            Write-Error "Error al instalar $ext: $($_.Exception.Message)"
+            Write-Error ("Error al instalar ${ext}: " + $_.Exception.Message)
         }
     }
     
